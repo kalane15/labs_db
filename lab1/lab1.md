@@ -1,4 +1,3 @@
-```markdown
 # Лабораторная работа №1. Проектирование реляционной модели данных
 
 ## Цель работы
@@ -328,4 +327,3 @@ Product (1) ─────── (0..*) DispatchItem
 | idx_receipt_item_product | receipt_item | product_id | Ускорение поиска всех приходов по товару |
 | idx_dispatch_item_invoice | dispatch_item | dispatch_invoice_id | Ускорение JOIN при получении позиций расходной накладной |
 | idx_dispatch_item_product | dispatch_item | product_id | Ускорение поиска всех расходов по товару |
-```
