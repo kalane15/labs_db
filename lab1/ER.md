@@ -22,8 +22,6 @@ entity "Product" as product {
     --
     name : varchar(200)
     unit : varchar(10)
-    current_quantity : numeric(15,3)
-    average_cost : numeric(15,2)
     --
     category_id : bigint <<FK>>
     supplier_id : bigint <<FK>>
@@ -33,7 +31,6 @@ entity "ReceiptInvoice" as receipt_invoice {
     * id : bigint <<PK>>
     --
     date : date
-    total_amount : numeric(15,2)
     --
     supplier_id : bigint <<FK>>
 }
@@ -53,7 +50,6 @@ entity "DispatchInvoice" as dispatch_invoice {
     --
     date : date
     destination : varchar(200)
-    total_amount : numeric(15,2)
 }
 
 entity "DispatchItem" as dispatch_item {
