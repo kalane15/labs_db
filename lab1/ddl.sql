@@ -72,3 +72,4 @@ CREATE TABLE dispatch_item (
     
     CONSTRAINT fk_dispatch_item_invoice FOREIGN KEY (dispatch_invoice_id) REFERENCES dispatch_invoice(id) ON DELETE CASCADE,
     CONSTRAINT fk_dispatch_item_product FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE RESTRICT
+);
