@@ -3,8 +3,6 @@ CREATE TABLE category (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT
-    -- add created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    -- add is_active BOOLEAN DEFAULT TRUE
 );
 
 -- Таблица поставщиков
@@ -15,9 +13,15 @@ CREATE TABLE supplier (
     phone VARCHAR(20) UNIQUE,
     email VARCHAR(100) UNIQUE
     
-    CONSTRAINT chk_supplier_phone CHECK (phone ~ '^[0-9+\-() ]+$'),
-    CONSTRAINT chk_supplier_email CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
-    CONSTRAINT chk_supplier_contact CHECK ((contact_person IS NOT NULL) OR (phone IS NOT NULL) OR (email IS NOT NULL)),
+    CONSTRAINT chk_supplier_phone CHECK (
+        phone ~ '^(\+7|8)[\s\-]?\(?[0-9]{3}\)?[\s\-]?[0-9]{3}[\s\-]?[0-9]{2}[\s\-]?[0-9]{2}$'
+    )
+    CONSTRAINT chk_supplier_email CHECK (
+        email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'
+        AND email NOT LIKE '%..%'
+        AND LENGTH(email) <= 254
+    ),
+    CONSTRAINT chk_supplier_contact CHECK ((contact_person IS NOT NULL) OR (phone IS NOT NULL) OR (email IS NOT NULL))
 );
 
 -- Таблица товаров
@@ -67,8 +71,8 @@ CREATE TABLE receipt_item (
 CREATE TABLE dispatch_invoice (
     id SERIAL PRIMARY KEY,
     date DATE NOT NULL DEFAULT CURRENT_DATE,
-    destination VARCHAR(200) NOT NULL
-    CONSTRAINT chk_dispatch_date CHECK (date <= CURRENT_DATE),
+    destination VARCHAR(200) NOT NULL,
+    CONSTRAINT chk_dispatch_date CHECK (date <= CURRENT_DATE)
 );
 
 -- Таблица позиций расходной накладной
@@ -80,6 +84,6 @@ CREATE TABLE dispatch_item (
     product_id INTEGER NOT NULL,
     
     CONSTRAINT fk_dispatch_item_invoice FOREIGN KEY (dispatch_invoice_id) REFERENCES dispatch_invoice(id) ON DELETE CASCADE,
-    CONSTRAINT fk_dispatch_item_product FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE RESTRICT
+    CONSTRAINT fk_dispatch_item_product FOREIGN KEY (product_id) REFERENCES product(id) ON DELETE RESTRICT,
     CONSTRAINT chk_dispatch_item_total CHECK (quantity * write_off_price >= 0)
 );

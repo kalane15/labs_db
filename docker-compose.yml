@@ -5,11 +5,11 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: mysecretpassword
-      POSTGRES_DB: warehouse_inventory
+      POSTGRES_DB: postgres
     ports:
-      - "5432:5432"
+      - "5431:5432"
     volumes:
-      - ./ddl.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
