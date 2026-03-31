@@ -29,19 +29,34 @@ FROM generate_series(1, 10);
 
 -- 3. Товары (100 штук)
 INSERT INTO product (name, unit, category_id, supplier_id)
+WITH product_templates AS (
+    SELECT 
+        unnest(ARRAY[
+            'Смартфон', 'Ноутбук', 'Планшет', 'Наушники', 'Телевизор',
+            'Холодильник', 'Микроволновка', 'Пылесос', 'Чайник', 'Кофеварка',
+            'Молоко', 'Хлеб', 'Сыр', 'Колбаса', 'Печенье',
+            'Вода', 'Сок', 'Кола', 'Чай', 'Кофе'
+        ]) as name_base,
+        unnest(ARRAY[
+            'шт', 'шт', 'шт', 'шт', 'шт',
+            'шт', 'шт', 'шт', 'шт', 'шт',
+            'л', 'шт', 'кг', 'кг', 'кг',
+            'л', 'л', 'л', 'уп', 'уп'
+        ]) as unit_base,
+        unnest(ARRAY[
+            1, 1, 1, 1, 1,
+            2, 2, 2, 2, 2,
+            3, 3, 3, 3, 3,
+            4, 4, 4, 4, 4
+        ]) as category_base
+)
 SELECT 
-    CONCAT(
-        (ARRAY['Смартфон', 'Ноутбук', 'Планшет', 'Наушники', 'Телевизор', 
-                'Холодильник', 'Микроволновка', 'Пылесос', 'Чайник', 'Кофеварка',
-                'Молоко', 'Хлеб', 'Сыр', 'Колбаса', 'Печенье',
-                'Вода', 'Сок', 'Кола', 'Чай', 'Кофе'])[floor(random() * 20 + 1)],
-        ' ',
-        floor(random() * 1000)::int
-    ) as name,
-    (ARRAY['шт', 'кг', 'л', 'м', 'уп'])[floor(random() * 5 + 1)] as unit,
-    (floor(random() * 8 + 1))::int as category_id,
+    CONCAT(name_base, ' ', floor(random() * 1000)::int) as name,
+    unit_base as unit,
+    category_base as category_id,
     (floor(random() * 10 + 1))::int as supplier_id
-FROM generate_series(1, 100);
+FROM product_templates
+CROSS JOIN generate_series(1, 5);
 
 -- 4. Приходные накладные (50 штук)
 INSERT INTO receipt_invoice (date, supplier_id)

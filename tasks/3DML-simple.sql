@@ -60,7 +60,7 @@ SELECT
     5.000 as quantity,
     p.avg_price as write_off_price,
     new_dispatch.id as dispatch_invoice_id,
-    p.id as product_id
+    p.product_id as product_id
 FROM (
     SELECT 
         product_id,
@@ -98,7 +98,7 @@ WHERE dispatch_invoice_id = (
     WHERE destination LIKE '%СтройМаркет%' 
     ORDER BY date DESC LIMIT 1
 )
-AND product_id = (SELECT id FROM product WHERE name LIKE 'Дрель%' LIMIT 1);
+AND product_id = (SELECT id FROM product WHERE name LIKE 'Дрель%');
 
 -- 2.4 Массовое обновление единиц измерения для товаров определенной категории
 UPDATE product 
@@ -134,9 +134,5 @@ WHERE date < CURRENT_DATE - INTERVAL '2 years'
 
 -- 3.5 Удаление всех документов за определенный месяц (с каскадом через внешние ключи)
 DELETE FROM receipt_invoice 
-WHERE EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month')
-  AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month');
-
-DELETE FROM dispatch_invoice 
 WHERE EXTRACT(YEAR FROM date) = EXTRACT(YEAR FROM CURRENT_DATE - INTERVAL '1 month')
   AND EXTRACT(MONTH FROM date) = EXTRACT(MONTH FROM CURRENT_DATE - INTERVAL '1 month');

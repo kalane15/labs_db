@@ -3,8 +3,8 @@
 -- =====================================================
 SELECT 
     COUNT(DISTINCT p.id) as total_products,
-    COUNT(DISTINCT s.id) as total_suppliers,
-    COUNT(DISTINCT c.id) as total_categories,
+    (SELECT COUNT(*) FROM supplier) as total_suppliers,
+    (SELECT COUNT(*) FROM category) as total_categories,
     COALESCE(SUM(ri.quantity), 0) as total_received,
     COALESCE(SUM(di.quantity), 0) as total_dispatched,
     COALESCE(SUM(ri.quantity * ri.purchase_price), 0)::numeric(15,2) as total_purchase_value,
@@ -12,13 +12,11 @@ SELECT
     COALESCE(AVG(ri.purchase_price), 0)::numeric(15,2) as avg_purchase_price,
     COALESCE(AVG(di.write_off_price), 0)::numeric(15,2) as avg_sales_price
 FROM product p
-CROSS JOIN (SELECT COUNT(*) FROM supplier) s
-CROSS JOIN (SELECT COUNT(*) FROM category) c
 LEFT JOIN receipt_item ri ON p.id = ri.product_id
-LEFT JOIN dispatch_item di ON p.id = di.product_id;
+LEFT JOIN dispatch_item di ON p.id = di.product_id;;
 
 -- =====================================================
--- 2. ярюрхярхйю он йюрецнпхъл (GROUP BY, HAVING, ORDER BY)
+-- 2. ярюрхярхйю он йюрецнпхъл
 -- =====================================================
 SELECT 
     c.name as category,
@@ -39,10 +37,10 @@ LEFT JOIN dispatch_item di ON p.id = di.product_id
 GROUP BY c.id, c.name
 HAVING SUM(ri.quantity * ri.purchase_price) > 10000
 ORDER BY sales_revenue DESC NULLS LAST
-LIMIT 10;
+LIMIT 100;
 
 -- =====================================================
--- 3. рно-10 рнбюпнб он нанпювхбюелнярх (юцпецюжхъ + бшвхякемхъ)
+-- 3. рно-10 рнбюпнб он нанпювхбюелнярх
 -- =====================================================
 SELECT 
     p.name as product,
@@ -67,10 +65,10 @@ ORDER BY turnover_percent DESC
 LIMIT 10;
 
 -- =====================================================
--- 4. дхмюлхйю он леяъжюл (юцпецюжхъ + тнплюрхпнбюмхе + нйнммше тсмйжхх)
+-- 4. дхмюлхйю он леяъжюл
 -- =====================================================
 SELECT 
-    TO_CHAR(date, 'YYYY-MM') as month,
+    TO_CHAR(COALESCE(ri2.date, di2.date), 'YYYY-MM') as month,
     COUNT(DISTINCT ri.id) as receipts_count,
     SUM(ri.quantity) as quantity_received,
     SUM(ri.quantity * ri.purchase_price)::numeric(15,2) as amount_received,
@@ -78,17 +76,17 @@ SELECT
     SUM(di.quantity) as quantity_sold,
     SUM(di.quantity * di.write_off_price)::numeric(15,2) as amount_sold,
     AVG(ri.purchase_price)::numeric(15,2) as avg_price,
-    SUM(SUM(ri.quantity * ri.purchase_price)) OVER (ORDER BY TO_CHAR(date, 'YYYY-MM'))::numeric(15,2) as cumulative_revenue
+    SUM(SUM(ri.quantity * ri.purchase_price)) OVER (ORDER BY TO_CHAR(COALESCE(ri2.date, di2.date), 'YYYY-MM'))::numeric(15,2) as cumulative_revenue
 FROM receipt_invoice ri2
 LEFT JOIN receipt_item ri ON ri2.id = ri.receipt_invoice_id
 FULL OUTER JOIN dispatch_invoice di2 ON TO_CHAR(ri2.date, 'YYYY-MM') = TO_CHAR(di2.date, 'YYYY-MM')
 LEFT JOIN dispatch_item di ON di2.id = di.dispatch_invoice_id
-GROUP BY TO_CHAR(date, 'YYYY-MM')
-ORDER BY month DESC
+GROUP BY TO_CHAR(COALESCE(ri2.date, di2.date), 'YYYY-MM')
+ORDER BY month ASC
 LIMIT 12;
 
 -- =====================================================
--- 5. ярюрхярхйю он онярюбыхйюл (я ледхюмни х пюмфхпнбюмхел)
+-- 5. ярюрхярхйю он онярюбыхйюл
 -- =====================================================
 SELECT 
     s.name as supplier,
