@@ -78,35 +78,3 @@ DROP TRIGGER IF EXISTS trg_audit_dispatch_item ON dispatch_item;
 CREATE TRIGGER trg_audit_dispatch_item
 AFTER INSERT OR UPDATE OR DELETE ON dispatch_item
 FOR EACH ROW EXECUTE FUNCTION audit_dispatch_item();
-
--- 3. Триггер проверки даты расходной накладной (нельзя списать раньше первой поставки товара)
-CREATE OR REPLACE FUNCTION check_dispatch_date()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_first_receipt_date DATE;
-    v_dispatch_date DATE;
-BEGIN
-    -- Получаем дату самой ранней поставки товара
-    SELECT MIN(ri.date) INTO v_first_receipt_date
-    FROM receipt_item ri_item
-    JOIN receipt_invoice ri ON ri_item.receipt_invoice_id = ri.id
-    WHERE ri_item.product_id = NEW.product_id;
-
-    -- Получаем дату расходной накладной
-    SELECT date INTO v_dispatch_date
-    FROM dispatch_invoice
-    WHERE id = NEW.dispatch_invoice_id;
-
-    IF v_first_receipt_date IS NOT NULL AND v_dispatch_date < v_first_receipt_date THEN
-        RAISE EXCEPTION 'Дата расхода (%) не может быть раньше даты первой поставки товара (%)',
-            v_dispatch_date, v_first_receipt_date
-            USING ERRCODE = 'P0005';
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-DROP TRIGGER IF EXISTS trg_check_dispatch_date ON dispatch_item;
-CREATE TRIGGER trg_check_dispatch_date
-BEFORE INSERT ON dispatch_item
-FOR EACH ROW EXECUTE FUNCTION check_dispatch_date();

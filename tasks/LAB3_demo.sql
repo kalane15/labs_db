@@ -67,18 +67,7 @@ SELECT
 FROM supplier s
 LIMIT 5;
 
--- 9. ДЕМОНСТРАЦИЯ ТРИГГЕРА ПРОВЕРКИ ДАТЫ РАСХОДА
--- Создадим новую расходную накладную с заведомо старой датой
-INSERT INTO dispatch_invoice (date, destination)
-VALUES ('2020-01-01', 'Тестовая точка (старая дата)')
-RETURNING id AS new_invoice_id;
-
--- Ожидается ошибка: "Дата расхода (2020-01-01) не может быть раньше даты первой поставки товара"
-INSERT INTO dispatch_item (quantity, write_off_price, dispatch_invoice_id, product_id)
-VALUES (1, 100, <вставьте_сюда_id_новой_накладной>, 1);
--- Вместо <...> ID, полученный на предыдущем шаге.
-
--- 10. ОБНОВЛЕНИЕ ДАННЫХ И АУДИТ
+-- 9. ОБНОВЛЕНИЕ ДАННЫХ И АУДИТ
 -- Обновим количество в последней добавленной приходной позиции
 UPDATE receipt_item 
 SET quantity = quantity + 2 
