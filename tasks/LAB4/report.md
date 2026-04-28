@@ -377,10 +377,10 @@ FROM (
 JOIN product p ON ri.product_id = p.id
 WHERE p.category_id = 3
 ORDER BY ri.purchase_price DESC
-LIMIT 100;
+LIMIT 100;```
 
 2. План выполнения без индекса на receipt_item.purchase_price:
-Limit (cost=29617.41..37337.19 rows=5 width=496) (actual time=76.438..77.778 rows=100 loops=1)
+```Limit (cost=29617.41..37337.19 rows=5 width=496) (actual time=76.438..77.778 rows=100 loops=1)
 Buffers: shared hit=1702 read=7258
 -> Nested Loop (cost=29617.41..37337.19 rows=5 width=496) (actual time=76.436..77.772 rows=100 loops=1)
 Buffers: shared hit=1702 read=7258
@@ -400,16 +400,16 @@ Filter: (category_id = 3)
 Rows Removed by Filter: 1
 Buffers: shared hit=1532
 Planning Time: 0.542 ms
-Execution Time: 77.851 ms
+Execution Time: 77.851 ms```
 
 3. Основное узкое место - получение топ-1000 записей по purchase_price. Без индекса на поле сортировки планировщик вынужден выполнить параллельное последовательное сканирование всей таблицы receipt_item (1 000 000 строк) и отсортировать все строки (даже с top-N heapsort это требует чтения и обработки каждого блока). Время выполнения ~77.8 мс, чтение 7258 буферов с диска.
 
 4. Для ускорения операции ORDER BY purchase_price DESC LIMIT N необходимо создать B‑tree индекс по полю purchase_price в убывающем порядке. B‑tree хранит данные в отсортированной структуре, поэтому PostgreSQL может выполнить Index Scan в обратном порядке, последовательно считывая только первые N записей индекса и обращаясь к таблице только для этих строк. Это полностью исключает полное сканирование и сортировку. Индекс на (purchase_price DESC) выбран потому, что направление сортировки в запросе – DESC, а B‑tree позволяет эффективно читать как в прямом, так и в обратном порядке, но явное указание DESC может дать небольшое преимущество. Альтернативы (хеш, GIN) не поддерживают сортировку.
 
-5. CREATE INDEX idx_receipt_item_purchase_price ON receipt_item (purchase_price DESC);
+5. ```CREATE INDEX idx_receipt_item_purchase_price ON receipt_item (purchase_price DESC);```
 
 6. Повторное выполнение оптимизированного запроса с индексом:
-Limit (cost=0.84..7659.34 rows=5 width=496) (actual time=0.129..4.299 rows=100 loops=1)
+```Limit (cost=0.84..7659.34 rows=5 width=496) (actual time=0.129..4.299 rows=100 loops=1)
 Buffers: shared hit=1555 read=364
 -> Nested Loop (cost=0.84..7659.34 rows=5 width=496) (actual time=0.128..4.289 rows=100 loops=1)
 Buffers: shared hit=1555 read=364
@@ -423,7 +423,7 @@ Filter: (category_id = 3)
 Rows Removed by Filter: 1
 Buffers: shared hit=1532
 Planning Time: 0.257 ms
-Execution Time: 4.330 ms
+Execution Time: 4.330 ms```
 
 7.
 Без индекса: 77.851 мс, прочитано 8960 буферов (1702 hit + 7258 read).
