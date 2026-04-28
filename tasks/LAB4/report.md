@@ -366,8 +366,7 @@
 ### Соединение таблиц (JOIN)
 
 1. Оптимизированный запрос (после изменения структуры):
-```sql
-SELECT ri.id, ri.quantity, ri.purchase_price, p.name, p.unit
+`SELECT ri.id, ri.quantity, ri.purchase_price, p.name, p.unit
 FROM (
     SELECT id, quantity, purchase_price, product_id
     FROM receipt_item
@@ -377,10 +376,10 @@ FROM (
 JOIN product p ON ri.product_id = p.id
 WHERE p.category_id = 3
 ORDER BY ri.purchase_price DESC
-LIMIT 100;```
+LIMIT 100;`
 
 2. План выполнения без индекса на receipt_item.purchase_price:
-```Limit (cost=29617.41..37337.19 rows=5 width=496) (actual time=76.438..77.778 rows=100 loops=1)
+`Limit (cost=29617.41..37337.19 rows=5 width=496) (actual time=76.438..77.778 rows=100 loops=1)
 Buffers: shared hit=1702 read=7258
 -> Nested Loop (cost=29617.41..37337.19 rows=5 width=496) (actual time=76.436..77.772 rows=100 loops=1)
 Buffers: shared hit=1702 read=7258
@@ -400,7 +399,7 @@ Filter: (category_id = 3)
 Rows Removed by Filter: 1
 Buffers: shared hit=1532
 Planning Time: 0.542 ms
-Execution Time: 77.851 ms```
+Execution Time: 77.851 ms`
 
 3. Основное узкое место - получение топ-1000 записей по purchase_price. Без индекса на поле сортировки планировщик вынужден выполнить параллельное последовательное сканирование всей таблицы receipt_item (1 000 000 строк) и отсортировать все строки (даже с top-N heapsort это требует чтения и обработки каждого блока). Время выполнения ~77.8 мс, чтение 7258 буферов с диска.
 
