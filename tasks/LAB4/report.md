@@ -362,3 +362,75 @@
    составляет ~2 раза, при 0,001% – тысячи раз. Таким образом, текстовый поиск
    по подстроке необходимо сопровождать индексом `pg_trgm`, особенно если
    искомые значения встречаются редко.
+
+### Соединение таблиц (JOIN)
+
+1. Оптимизированный запрос (после изменения структуры):
+```sql
+SELECT ri.id, ri.quantity, ri.purchase_price, p.name, p.unit
+FROM (
+    SELECT id, quantity, purchase_price, product_id
+    FROM receipt_item
+    ORDER BY purchase_price DESC
+    LIMIT 1000
+) ri
+JOIN product p ON ri.product_id = p.id
+WHERE p.category_id = 3
+ORDER BY ri.purchase_price DESC
+LIMIT 100;
+
+2. План выполнения без индекса на receipt_item.purchase_price:
+Limit (cost=29617.41..37337.19 rows=5 width=496) (actual time=76.438..77.778 rows=100 loops=1)
+Buffers: shared hit=1702 read=7258
+-> Nested Loop (cost=29617.41..37337.19 rows=5 width=496) (actual time=76.436..77.772 rows=100 loops=1)
+Buffers: shared hit=1702 read=7258
+-> Limit (cost=29616.99..29733.67 rows=1000 width=44) (actual time=76.398..77.418 rows=383 loops=1)
+Buffers: shared hit=170 read=7258
+-> Gather Merge (cost=29616.99..106145.17 rows=655910 width=44) (actual time=76.397..77.399 rows=383 loops=1)
+Workers Planned: 2, Workers Launched: 2
+Buffers: shared hit=170 read=7258
+-> Sort (cost=28616.97..29436.86 rows=327955 width=44) (actual time=74.216..74.242 rows=710 loops=3)
+Sort Key: receipt_item.purchase_price DESC
+Sort Method: top-N heapsort Memory: 195kB
+-> Parallel Seq Scan on receipt_item (cost=0.00..10635.55 rows=327955 width=44) (actual time=0.022..29.399 rows=333500 loops=3)
+Buffers: shared hit=98 read=7258
+-> Index Scan using product_pkey on product p (cost=0.42..7.59 rows=1 width=460) (actual time=0.001..0.001 rows=0 loops=383)
+Index Cond: (id = receipt_item.product_id)
+Filter: (category_id = 3)
+Rows Removed by Filter: 1
+Buffers: shared hit=1532
+Planning Time: 0.542 ms
+Execution Time: 77.851 ms
+
+3. Основное узкое место - получение топ-1000 записей по purchase_price. Без индекса на поле сортировки планировщик вынужден выполнить параллельное последовательное сканирование всей таблицы receipt_item (1 000 000 строк) и отсортировать все строки (даже с top-N heapsort это требует чтения и обработки каждого блока). Время выполнения ~77.8 мс, чтение 7258 буферов с диска.
+
+4. Для ускорения операции ORDER BY purchase_price DESC LIMIT N необходимо создать B‑tree индекс по полю purchase_price в убывающем порядке. B‑tree хранит данные в отсортированной структуре, поэтому PostgreSQL может выполнить Index Scan в обратном порядке, последовательно считывая только первые N записей индекса и обращаясь к таблице только для этих строк. Это полностью исключает полное сканирование и сортировку. Индекс на (purchase_price DESC) выбран потому, что направление сортировки в запросе – DESC, а B‑tree позволяет эффективно читать как в прямом, так и в обратном порядке, но явное указание DESC может дать небольшое преимущество. Альтернативы (хеш, GIN) не поддерживают сортировку.
+
+5. CREATE INDEX idx_receipt_item_purchase_price ON receipt_item (purchase_price DESC);
+
+6. Повторное выполнение оптимизированного запроса с индексом:
+Limit (cost=0.84..7659.34 rows=5 width=496) (actual time=0.129..4.299 rows=100 loops=1)
+Buffers: shared hit=1555 read=364
+-> Nested Loop (cost=0.84..7659.34 rows=5 width=496) (actual time=0.128..4.289 rows=100 loops=1)
+Buffers: shared hit=1555 read=364
+-> Limit (cost=0.42..55.82 rows=1000 width=44) (actual time=0.056..3.335 rows=383 loops=1)
+Buffers: shared hit=23 read=364
+-> Index Scan using idx_receipt_item_purchase_price on receipt_item (cost=0.42..55419.93 rows=1000500 width=44) (actual time=0.055..3.284 rows=383 loops=1)
+Buffers: shared hit=23 read=364
+-> Index Scan using product_pkey on product p (cost=0.42..7.59 rows=1 width=460) (actual time=0.002..0.002 rows=0 loops=383)
+Index Cond: (id = receipt_item.product_id)
+Filter: (category_id = 3)
+Rows Removed by Filter: 1
+Buffers: shared hit=1532
+Planning Time: 0.257 ms
+Execution Time: 4.330 ms
+
+7.
+Без индекса: 77.851 мс, прочитано 8960 буферов (1702 hit + 7258 read).
+
+С индексом: 4.330 мс, прочитано 1919 буферов (1555 hit + 364 read).
+Ускорение примерно в 18 раз (77.851 / 4.330 ≈ 18.0).
+Количество операций ввода-вывода сократилось в 4,7 раза (8960 / 1919 ≈ 4,7).
+Вместо параллельного последовательного сканирования всей таблицы внутренний подзапрос выполнил Index Scan, который прочитал только 383 записи (столько реально потребовалось для получения 1000, но из-за фильтрации по категории фактически выбрано 383) и сделал минимальное количество обращений к таблице.
+
+8. Вывод: гипотеза полностью подтверждена. Индекс на purchase_price DESC в сочетании с переписанным запросом (подзапрос с ORDER BY и LIMIT до соединения) дал ускорение в 18 раз. Ключевой фактор успеха – изменение структуры запроса, позволяющее применить индекс для получения топ-N до выполнения соединения и фильтрации. Если бы индексировалось только поле product_id или category_id, эффект был бы минимальным, так как основная тяжесть запроса – сортировка и ограничение. Данный пример показывает важность выбора правильного индекса и соответствующей перестройки запроса для его эффективного использования.
