@@ -1,15 +1,14 @@
-INSERT INTO category (name, description)
-VALUES ('Старая категория', 'Попытка создать дубликат')
-RETURNING id;
-
 BEGIN;
 
-INSERT INTO category (name, description)
-VALUES ('Старая категория', 'Попытка создать дубликат')
+INSERT INTO dispatch_invoice (date, destination)
+VALUES (CURRENT_DATE, 'ИП "Покупатель"');
 
-UPDATE product
-SET category_id = 9;
+INSERT INTO dispatch_item (quantity, write_off_price, dispatch_invoice_id, product_id)
+VALUES (5.000, -100.00, currval('dispatch_invoice_id_seq'), 5);
+
+UPDATE supplier SET contact_person = 'Новый контакт' WHERE id = (SELECT supplier_id FROM product WHERE id = 5);
 
 ROLLBACK;
 
-SELECT * FROM product P WHERE p.category_id = 9;
+SELECT * FROM dispatch_invoice WHERE id = currval('dispatch_invoice_id_seq');
+SELECT contact_person FROM supplier WHERE id = (SELECT supplier_id FROM product WHERE id = 5);
