@@ -1,0 +1,149 @@
+from fastapi import APIRouter, Depends, Query, HTTPException, status
+from typing import List, Optional
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+import models, schemas
+from database import get_db
+
+router = APIRouter(prefix="/products", tags=["products"])
+
+
+# ---------- CRUD functions ----------
+def get_product(db: Session, product_id: int):
+    return db.query(models.Product).filter(models.Product.id == product_id).first()
+
+
+def get_products(db: Session, skip: int = 0, limit: int = 100, sort: str = "id", order: str = "asc",
+                 category_id: int = None, supplier_id: int = None):
+    query = db.query(models.Product)
+    if category_id:
+        query = query.filter(models.Product.category_id == category_id)
+    if supplier_id:
+        query = query.filter(models.Product.supplier_id == supplier_id)
+    if sort == "name":
+        sort_col = models.Product.name
+    elif sort == "category_id":
+        sort_col = models.Product.category_id
+    elif sort == "supplier_id":
+        sort_col = models.Product.supplier_id
+    else:
+        sort_col = models.Product.id
+    if order == "desc":
+        query = query.order_by(sort_col.desc())
+    else:
+        query = query.order_by(sort_col.asc())
+    return query.offset(skip).limit(limit).all()
+
+
+def create_product(db: Session, product: schemas.ProductCreate):
+    category = db.query(models.Category).filter(models.Category.id == product.category_id).first()
+    if not category:
+        raise HTTPException(status_code=400, detail=f"Category with id {product.category_id} does not exist")
+    supplier = db.query(models.Supplier).filter(models.Supplier.id == product.supplier_id).first()
+    if not supplier:
+        raise HTTPException(status_code=400, detail=f"Supplier with id {product.supplier_id} does not exist")
+
+    db_product = models.Product(**product.model_dump())
+    try:
+        db.add(db_product)
+        db.commit()
+        db.refresh(db_product)
+        return db_product
+    except IntegrityError as e:
+        db.rollback()
+        if "chk_product_unit" in str(e.orig):
+            raise HTTPException(status_code=400, detail="Invalid unit value. Allowed: шт, кг, л, м, уп")
+        raise HTTPException(status_code=400, detail=f"Database integrity error: {e.orig}")
+
+
+def update_product(db: Session, product_id: int, product_update: schemas.ProductUpdate):
+    db_product = get_product(db, product_id)
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    update_data = product_update.model_dump(exclude_unset=True)
+
+
+    if "category_id" in update_data:
+        cat = db.query(models.Category).filter(models.Category.id == update_data["category_id"]).first()
+        if not cat:
+            raise HTTPException(status_code=400, detail=f"Category id {update_data['category_id']} not found")
+
+    if "supplier_id" in update_data:
+        sup = db.query(models.Supplier).filter(models.Supplier.id == update_data["supplier_id"]).first()
+        if not sup:
+            raise HTTPException(status_code=400, detail=f"Supplier id {update_data['supplier_id']} not found")
+
+    for key, value in update_data.items():
+        setattr(db_product, key, value)
+
+    try:
+        db.commit()
+        db.refresh(db_product)
+        return db_product
+    except IntegrityError as e:
+        db.rollback()
+        if "chk_product_unit" in str(e.orig):
+            raise HTTPException(status_code=400, detail="Invalid unit value. Allowed: шт, кг, л, м, уп")
+        raise HTTPException(status_code=400, detail=f"Update error: {e.orig}")
+
+
+def delete_product(db: Session, product_id: int):
+    db_product = get_product(db, product_id)
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    try:
+        db.delete(db_product)
+        db.commit()
+        return {"message": "Product deleted"}
+    except IntegrityError as e:
+        db.rollback()
+        if "foreign key constraint" in str(e.orig).lower() or "fk_receipt_item_product" in str(e.orig):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot delete product: it is referenced in receipt or dispatch items"
+            )
+        raise HTTPException(status_code=400, detail=f"Deletion error: {e.orig}")
+
+
+# ---------- Endpoints ----------
+@router.get("/", response_model=List[schemas.ProductResponse])
+def read_products(
+        skip: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=200),
+        sort: str = "id",
+        order: str = "asc",
+        category_id: Optional[int] = None,
+        supplier_id: Optional[int] = None,
+        db: Session = Depends(get_db)
+):
+    return get_products(db, skip=skip, limit=limit, sort=sort, order=order,
+                        category_id=category_id, supplier_id=supplier_id)
+
+
+@router.get("/{product_id}", response_model=schemas.ProductResponse)
+def read_product(product_id: int, db: Session = Depends(get_db)):
+    db_product = get_product(db, product_id)
+    if db_product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return db_product
+
+
+@router.post("/", response_model=schemas.ProductResponse, status_code=201)
+def create_product_endpoint(product: schemas.ProductCreate, db: Session = Depends(get_db)):
+    return create_product(db, product)
+
+
+@router.patch("/{product_id}", response_model=schemas.ProductResponse)
+def update_product_endpoint(
+        product_id: int,
+        product_update: schemas.ProductUpdate,
+        db: Session = Depends(get_db)
+):
+    return update_product(db, product_id, product_update)
+
+
+@router.delete("/{product_id}")
+def delete_product_endpoint(product_id: int, db: Session = Depends(get_db)):
+    return delete_product(db, product_id)
