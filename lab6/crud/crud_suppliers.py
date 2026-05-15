@@ -1,3 +1,9 @@
+"""
+Модуль CRUD-операций для поставщиков (Supplier).
+Содержит функции для получения, создания, обновления и удаления поставщиков,
+а также эндпоинты FastAPI с группировкой через APIRouter.
+"""
+
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,16 +16,33 @@ router = APIRouter(prefix="/suppliers", tags=["suppliers"])
 
 # ---------- CRUD functions ----------
 def get_supplier(db: Session, supplier_id: int):
+    """
+    Получить поставщика по ID.
+
+    Args:
+        db (Session): Сессия базы данных.
+        supplier_id (int): Идентификатор поставщика.
+
+    Returns:
+        models.Supplier | None: Объект поставщика или None.
+    """
     return db.query(models.Supplier).filter(models.Supplier.id == supplier_id).first()
 
 
-def get_suppliers(
-        db: Session,
-        skip: int = 0,
-        limit: int = 100,
-        sort: str = "id",
-        order: str = "asc"
-):
+def get_suppliers(db: Session, skip: int = 0, limit: int = 100, sort: str = "id", order: str = "asc"):
+    """
+    Получить список поставщиков с пагинацией и сортировкой.
+
+    Args:
+        db (Session): Сессия базы данных.
+        skip (int): Количество записей для пропуска.
+        limit (int): Максимальное количество записей.
+        sort (str): Поле сортировки ('id' или 'name').
+        order (str): Направление ('asc' или 'desc').
+
+    Returns:
+        List[models.Supplier]: Список поставщиков.
+    """
     query = db.query(models.Supplier)
     sort_column = models.Supplier.name if sort == "name" else models.Supplier.id
     if order == "desc":
@@ -30,7 +53,21 @@ def get_suppliers(
 
 
 def create_supplier(db: Session, supplier: schemas.SupplierCreate):
-    # Проверка CHECK constraint: хотя бы одно из contact_person, phone, email не NULL
+    """
+    Создать нового поставщика.
+
+    Args:
+        db (Session): Сессия базы данных.
+        supplier (schemas.SupplierCreate): Данные для создания.
+
+    Returns:
+        models.Supplier: Созданный поставщик.
+
+    Raises:
+        HTTPException: 400, если не заполнено ни одно из contact_person/phone/email,
+                       или нарушен формат телефона/email;
+                       409, если телефон или email уже существуют.
+    """
     if supplier.contact_person is None and supplier.phone is None and supplier.email is None:
         raise HTTPException(status_code=400, detail="At least one of contact_person, phone, email must be provided")
     try:
@@ -52,11 +89,27 @@ def create_supplier(db: Session, supplier: schemas.SupplierCreate):
 
 
 def update_supplier(db: Session, supplier_id: int, supplier_update: schemas.SupplierUpdate):
+    """
+    Обновить данные поставщика.
+
+    Args:
+        db (Session): Сессия базы данных.
+        supplier_id (int): ID поставщика.
+        supplier_update (schemas.SupplierUpdate): Данные для обновления.
+
+    Returns:
+        models.Supplier: Обновлённый поставщик.
+
+    Raises:
+        HTTPException: 404, если поставщик не найден;
+                       400, если после обновления все три контактных поля стали None
+                       или нарушен формат;
+                       409, если телефон/email уже используются.
+    """
     db_supplier = get_supplier(db, supplier_id)
     if not db_supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
     update_data = supplier_update.model_dump(exclude_unset=True)
-    # При обновлении проверяем, что не все три поля стали NULL
     new_contact = update_data.get("contact_person", db_supplier.contact_person)
     new_phone = update_data.get("phone", db_supplier.phone)
     new_email = update_data.get("email", db_supplier.email)
@@ -81,6 +134,20 @@ def update_supplier(db: Session, supplier_id: int, supplier_update: schemas.Supp
 
 
 def delete_supplier(db: Session, supplier_id: int):
+    """
+    Удалить поставщика.
+
+    Args:
+        db (Session): Сессия базы данных.
+        supplier_id (int): ID поставщика.
+
+    Returns:
+        dict: Сообщение об успешном удалении.
+
+    Raises:
+        HTTPException: 404, если поставщик не найден;
+                       409, если на поставщика ссылаются товары или приходы.
+    """
     db_supplier = get_supplier(db, supplier_id)
     if not db_supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
@@ -105,11 +172,19 @@ def read_suppliers(
         order: str = "asc",
         db: Session = Depends(get_db)
 ):
+    """
+    GET /suppliers
+    Получить список поставщиков с пагинацией и сортировкой.
+    """
     return get_suppliers(db, skip=skip, limit=limit, sort=sort, order=order)
 
 
 @router.get("/{supplier_id}", response_model=schemas.SupplierResponse)
 def read_supplier(supplier_id: int, db: Session = Depends(get_db)):
+    """
+    GET /suppliers/{supplier_id}
+    Получить поставщика по ID.
+    """
     db_supplier = get_supplier(db, supplier_id)
     if db_supplier is None:
         raise HTTPException(status_code=404, detail="Supplier not found")
@@ -118,6 +193,10 @@ def read_supplier(supplier_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=schemas.SupplierResponse, status_code=201)
 def create_supplier_endpoint(supplier: schemas.SupplierCreate, db: Session = Depends(get_db)):
+    """
+    POST /suppliers
+    Создать нового поставщика.
+    """
     return create_supplier(db, supplier)
 
 
@@ -127,9 +206,17 @@ def update_supplier_endpoint(
         supplier_update: schemas.SupplierUpdate,
         db: Session = Depends(get_db)
 ):
+    """
+    PATCH /suppliers/{supplier_id}
+    Частично обновить данные поставщика.
+    """
     return update_supplier(db, supplier_id, supplier_update)
 
 
 @router.delete("/{supplier_id}")
 def delete_supplier_endpoint(supplier_id: int, db: Session = Depends(get_db)):
+    """
+    DELETE /suppliers/{supplier_id}
+    Удалить поставщика.
+    """
     return delete_supplier(db, supplier_id)

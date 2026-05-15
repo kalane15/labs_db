@@ -77,5 +77,4 @@ def call_add_dispatch_item(req: schemas.AddDispatchItemRequest, db: Session = De
         return schemas.ProcedureResponse(message="Dispatch item added successfully", success=True)
     except Exception as e:
         db.rollback()
-        # Пробрасываем понятную ошибку (процедура уже формирует сообщения)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

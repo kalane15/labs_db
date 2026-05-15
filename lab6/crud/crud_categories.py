@@ -1,3 +1,9 @@
+"""
+Модуль CRUD-операций для категорий товаров (Category).
+Содержит функции для получения, создания, обновления и удаления категорий,
+а также эндпоинты FastAPI с группировкой через APIRouter.
+"""
+
 from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -10,10 +16,33 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 # ---------- CRUD functions ----------
 def get_category(db: Session, category_id: int):
+    """
+    Получить категорию по ID.
+
+    Args:
+        db (Session): Сессия базы данных.
+        category_id (int): Идентификатор категории.
+
+    Returns:
+        models.Category | None: Объект категории или None.
+    """
     return db.query(models.Category).filter(models.Category.id == category_id).first()
 
 
 def get_categories(db: Session, skip: int = 0, limit: int = 100, sort: str = "id", order: str = "asc"):
+    """
+    Получить список категорий с пагинацией и сортировкой.
+
+    Args:
+        db (Session): Сессия базы данных.
+        skip (int): Количество записей для пропуска.
+        limit (int): Максимальное количество записей.
+        sort (str): Поле сортировки ('id' или 'name').
+        order (str): Направление ('asc' или 'desc').
+
+    Returns:
+        List[models.Category]: Список категорий.
+    """
     query = db.query(models.Category)
     if sort == "name":
         order_col = models.Category.name
@@ -27,6 +56,19 @@ def get_categories(db: Session, skip: int = 0, limit: int = 100, sort: str = "id
 
 
 def create_category(db: Session, category: schemas.CategoryCreate):
+    """
+    Создать новую категорию.
+
+    Args:
+        db (Session): Сессия базы данных.
+        category (schemas.CategoryCreate): Данные для создания.
+
+    Returns:
+        models.Category: Созданная категория.
+
+    Raises:
+        HTTPException: 409, если имя категории уже существует.
+    """
     try:
         db_category = models.Category(**category.model_dump())
         db.add(db_category)
@@ -42,6 +84,21 @@ def create_category(db: Session, category: schemas.CategoryCreate):
 
 
 def update_category(db: Session, category_id: int, category_update: schemas.CategoryUpdate):
+    """
+    Обновить категорию.
+
+    Args:
+        db (Session): Сессия базы данных.
+        category_id (int): ID категории.
+        category_update (schemas.CategoryUpdate): Данные для обновления.
+
+    Returns:
+        models.Category: Обновлённая категория.
+
+    Raises:
+        HTTPException: 404, если категория не найдена;
+                       409, если новое имя уже существует.
+    """
     db_category = get_category(db, category_id)
     if not db_category:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
@@ -61,6 +118,20 @@ def update_category(db: Session, category_id: int, category_update: schemas.Cate
 
 
 def delete_category(db: Session, category_id: int):
+    """
+    Удалить категорию.
+
+    Args:
+        db (Session): Сессия базы данных.
+        category_id (int): ID категории.
+
+    Returns:
+        dict: Сообщение об успешном удалении.
+
+    Raises:
+        HTTPException: 404, если категория не найдена;
+                       409, если на категорию ссылаются товары.
+    """
     db_category = get_category(db, category_id)
     if not db_category:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Category not found")
@@ -86,11 +157,19 @@ def read_categories(
         order: str = "asc",
         db: Session = Depends(get_db)
 ):
+    """
+    GET /categories
+    Получить список категорий с пагинацией и сортировкой.
+    """
     return get_categories(db, skip=skip, limit=limit, sort=sort, order=order)
 
 
 @router.get("/{category_id}", response_model=schemas.CategoryResponse)
 def read_category(category_id: int, db: Session = Depends(get_db)):
+    """
+    GET /categories/{category_id}
+    Получить категорию по ID.
+    """
     db_category = get_category(db, category_id)
     if db_category is None:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -99,6 +178,10 @@ def read_category(category_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=schemas.CategoryResponse, status_code=201)
 def create_category_endpoint(category: schemas.CategoryCreate, db: Session = Depends(get_db)):
+    """
+    POST /categories
+    Создать новую категорию.
+    """
     return create_category(db, category)
 
 
@@ -108,9 +191,17 @@ def update_category_endpoint(
         category_update: schemas.CategoryUpdate,
         db: Session = Depends(get_db)
 ):
+    """
+    PATCH /categories/{category_id}
+    Частично обновить категорию.
+    """
     return update_category(db, category_id, category_update)
 
 
 @router.delete("/{category_id}")
 def delete_category_endpoint(category_id: int, db: Session = Depends(get_db)):
+    """
+    DELETE /categories/{category_id}
+    Удалить категорию.
+    """
     return delete_category(db, category_id)

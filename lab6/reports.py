@@ -152,8 +152,6 @@ def inventory_summary(
             CASE :sort_by
                 WHEN 'current_balance' THEN current_balance
                 WHEN 'total_sold' THEN total_sold
-                -- Вместо использования алиаса 'turnover_percentage',
-                -- мы повторяем выражение, которое его вычисляет.
                 ELSE ROUND(100.0 * total_sold / NULLIF(total_received, 0), 1)
             END DESC
     """)
