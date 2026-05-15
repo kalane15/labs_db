@@ -10,7 +10,7 @@ class Category(Base):
     name = Column(String(100), unique=True, nullable=False)
     description = Column(String)
 
-    products = relationship("Product", back_populates="category")
+    products = relationship("Product", back_populates="category", passive_deletes=True)
 
 
 class Supplier(Base):
@@ -22,7 +22,7 @@ class Supplier(Base):
     phone = Column(String(20), unique=True)
     email = Column(String(100), unique=True)
 
-    products = relationship("Product", back_populates="supplier")
+    products = relationship("Product", back_populates="supplier", passive_deletes=True)
 
 
 class Product(Base):
@@ -34,5 +34,5 @@ class Product(Base):
     category_id = Column(Integer, ForeignKey("category.id", ondelete="RESTRICT"), nullable=False)
     supplier_id = Column(Integer, ForeignKey("supplier.id", ondelete="RESTRICT"), nullable=False)
 
-    category = relationship("Category", back_populates="products")
-    supplier = relationship("Supplier", back_populates="products")
+    category = relationship("Category", back_populates="products", passive_deletes=True)
+    supplier = relationship("Supplier", back_populates="products", passive_deletes=True)
