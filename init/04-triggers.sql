@@ -1,4 +1,4 @@
-﻿-- 0. Создание таблицы аудита (если ещё не создана)
+-- 0. Создание таблицы аудита (если ещё не создана)
 CREATE TABLE IF NOT EXISTS audit_log (
     id SERIAL PRIMARY KEY,
     operation VARCHAR(10) NOT NULL,        -- INSERT, UPDATE, DELETE
