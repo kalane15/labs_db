@@ -1,10 +1,20 @@
-﻿-- 1. Функция расчёта текущего остатка товара
+﻿-- 1. Функция расчёта текущего остатка товара с проверками
 CREATE OR REPLACE FUNCTION get_product_balance(p_product_id INTEGER)
 RETURNS NUMERIC(15,3) AS $$
 DECLARE
     v_received NUMERIC(15,3);
     v_dispatched NUMERIC(15,3);
+    v_product_exists BOOLEAN;
 BEGIN
+    IF p_product_id IS NULL THEN
+        RAISE EXCEPTION 'product_id cannot be NULL';
+    END IF;
+
+    SELECT EXISTS (SELECT 1 FROM product WHERE id = p_product_id) INTO v_product_exists;
+    IF NOT v_product_exists THEN
+        RAISE EXCEPTION 'Product with id % does not exist', p_product_id;
+    END IF;
+
     SELECT COALESCE(SUM(quantity), 0) INTO v_received
     FROM receipt_item
     WHERE product_id = p_product_id;
@@ -128,7 +138,21 @@ CREATE OR REPLACE FUNCTION is_supplier_active(
 RETURNS BOOLEAN AS $$
 DECLARE
     v_count INTEGER;
+    v_supplier_exists BOOLEAN;
 BEGIN
+    IF p_supplier_id IS NULL THEN
+        RAISE EXCEPTION 'supplier_id cannot be NULL';
+    END IF;
+
+    IF p_days <= 0 THEN
+        RAISE EXCEPTION 'p_days must be positive (got %)', p_days;
+    END IF;
+
+    SELECT EXISTS (SELECT 1 FROM supplier WHERE id = p_supplier_id) INTO v_supplier_exists;
+    IF NOT v_supplier_exists THEN
+        RAISE EXCEPTION 'Supplier with id % does not exist', p_supplier_id;
+    END IF;
+
     SELECT COUNT(*) INTO v_count
     FROM receipt_invoice ri
     WHERE ri.supplier_id = p_supplier_id

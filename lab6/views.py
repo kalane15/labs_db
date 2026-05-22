@@ -17,7 +17,7 @@ def get_top_products(
 ):
     """
     Возвращает топ товаров по обороту из представления top_products_by_turnover.
-    По умолчанию только товары с total_sold_quantity > 0, сортировка по turnover_rank.
+    Возвращает товары с total_sold_quantity > min_sold, сортировка по turnover_rank.
     """
     sql = text("""
         SELECT *

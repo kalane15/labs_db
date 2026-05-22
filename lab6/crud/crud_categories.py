@@ -4,8 +4,8 @@
 а также эндпоинты FastAPI с группировкой через APIRouter.
 """
 
-from typing import List
-from sqlalchemy.orm import Session
+from typing import List, Optional
+from sqlalchemy.orm import Session, InstrumentedAttribute
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status, APIRouter, Query, Depends
 import models, schemas
@@ -29,9 +29,17 @@ def get_category(db: Session, category_id: int):
     return db.query(models.Category).filter(models.Category.id == category_id).first()
 
 
-def get_categories(db: Session, skip: int = 0, limit: int = 100, sort: str = "id", order: str = "asc"):
+def get_categories(
+        db: Session,
+        skip: int = 0,
+        limit: int = 100,
+        sort: str = "id",
+        order: str = "asc",
+        name: Optional[str] = None,
+        description: Optional[str] = None
+):
     """
-    Получить список категорий с пагинацией и сортировкой.
+    Получить список категорий с пагинацией, сортировкой и фильтрацией.
 
     Args:
         db (Session): Сессия базы данных.
@@ -39,19 +47,33 @@ def get_categories(db: Session, skip: int = 0, limit: int = 100, sort: str = "id
         limit (int): Максимальное количество записей.
         sort (str): Поле сортировки ('id' или 'name').
         order (str): Направление ('asc' или 'desc').
+        name (str, optional): Фильтр по имени (частичное совпадение, без учёта регистра).
+        description (str, optional): Фильтр по описанию (частичное совпадение).
 
     Returns:
-        List[models.Category]: Список категорий.
+        List[models.Category]: Список категорий, удовлетворяющих условиям.
     """
     query = db.query(models.Category)
-    if sort == "name":
-        order_col = models.Category.name
-    else:
-        order_col = models.Category.id
+
+    if name:
+        query = query.filter(models.Category.name.ilike(f"%{name}%"))
+    if description:
+        query = query.filter(models.Category.description.ilike(f"%{description}%"))
+
+    if not hasattr(models.Product, sort):
+        raise HTTPException(status_code=400, detail=f"Invalid sort column: '{sort}'")
+    attr = getattr(models.Product, sort)
+    if not isinstance(attr, InstrumentedAttribute):
+        raise HTTPException(status_code=400, detail=f"Cannot sort by '{sort}': not a column")
+    sort_col = attr
+
     if order == "desc":
-        query = query.order_by(order_col.desc())
+        query = query.order_by(sort_col .desc())
+    elif order == "asc":
+        query = query.order_by(sort_col .asc())
     else:
-        query = query.order_by(order_col.asc())
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown order")
+
     return query.offset(skip).limit(limit).all()
 
 
@@ -155,13 +177,23 @@ def read_categories(
         limit: int = Query(100, ge=1, le=200),
         sort: str = "id",
         order: str = "asc",
+        name: Optional[str] = Query(None, description="Filter by name (partial match, case-insensitive)"),
+        description: Optional[str] = Query(None, description="Filter by description (partial match)"),
         db: Session = Depends(get_db)
 ):
     """
     GET /categories
-    Получить список категорий с пагинацией и сортировкой.
+    Получить список категорий с пагинацией, сортировкой и фильтрацией.
     """
-    return get_categories(db, skip=skip, limit=limit, sort=sort, order=order)
+    return get_categories(
+        db,
+        skip=skip,
+        limit=limit,
+        sort=sort,
+        order=order,
+        name=name,
+        description=description
+    )
 
 
 @router.get("/{category_id}", response_model=schemas.CategoryResponse)

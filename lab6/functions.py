@@ -12,11 +12,15 @@ def get_product_balance(product_id: int, db: Session = Depends(get_db)):
     """
     Вызов функции get_product_balance для расчёта остатка товара.
     """
-    sql = text("SELECT get_product_balance(:pid) AS balance")
-    result = db.execute(sql, {"pid": product_id}).scalar()
-    if result is None:
-        raise HTTPException(status_code=404, detail="Product not found or function error")
-    return schemas.ProductBalanceResponse(product_id=product_id, balance=float(result))
+    try:
+        sql = text("SELECT get_product_balance(:pid) AS balance")
+        result = db.execute(sql, {"pid": product_id}).scalar()
+        if result is None:
+            raise HTTPException(status_code=404, detail="Product not found or function error")
+        return schemas.ProductBalanceResponse(product_id=product_id, balance=float(result))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 
 
 @router.get("/supplier-active/{supplier_id}", response_model=schemas.SupplierActiveResponse)
@@ -28,15 +32,18 @@ def check_supplier_active(
     """
     Вызов функции is_supplier_active для проверки активности поставщика за N дней.
     """
-    sql = text("SELECT is_supplier_active(:sid, :days) AS is_active")
-    result = db.execute(sql, {"sid": supplier_id, "days": days}).scalar()
-    if result is None:
-        raise HTTPException(status_code=404, detail="Supplier not found or function error")
-    return schemas.SupplierActiveResponse(
-        supplier_id=supplier_id,
-        is_active=result,
-        checked_days=days
-    )
+    try:
+        sql = text("SELECT is_supplier_active(:sid, :days) AS is_active")
+        result = db.execute(sql, {"sid": supplier_id, "days": days}).scalar()
+        if result is None:
+            raise HTTPException(status_code=404, detail="Supplier not found or function error")
+        return schemas.SupplierActiveResponse(
+            supplier_id=supplier_id,
+            is_active=result,
+            checked_days=days
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.post("/add-receipt-item", response_model=schemas.ProcedureResponse, status_code=201)

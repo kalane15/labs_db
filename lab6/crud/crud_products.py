@@ -6,7 +6,7 @@
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, InstrumentedAttribute
 from sqlalchemy.exc import IntegrityError
 import models, schemas
 from database import get_db
@@ -51,18 +51,21 @@ def get_products(db: Session, skip: int = 0, limit: int = 100, sort: str = "id",
         query = query.filter(models.Product.category_id == category_id)
     if supplier_id:
         query = query.filter(models.Product.supplier_id == supplier_id)
-    if sort == "name":
-        sort_col = models.Product.name
-    elif sort == "category_id":
-        sort_col = models.Product.category_id
-    elif sort == "supplier_id":
-        sort_col = models.Product.supplier_id
-    else:
-        sort_col = models.Product.id
+
+    if not hasattr(models.Product, sort):
+        raise HTTPException(status_code=400, detail=f"Invalid sort column: '{sort}'")
+    attr = getattr(models.Product, sort)
+    if not isinstance(attr, InstrumentedAttribute):
+        raise HTTPException(status_code=400, detail=f"Cannot sort by '{sort}': not a column")
+    sort_col = attr
+
     if order == "desc":
         query = query.order_by(sort_col.desc())
-    else:
+    elif order == "asc":
         query = query.order_by(sort_col.asc())
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown order")
+
     return query.offset(skip).limit(limit).all()
 
 

@@ -3,11 +3,12 @@
 Содержит функции для получения, создания, обновления и удаления поставщиков,
 а также эндпоинты FastAPI с группировкой через APIRouter.
 """
-
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, InstrumentedAttribute
 from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from typing import List
+from typing import List, Optional
+from sqlalchemy import Column
+
 import models, schemas
 from database import get_db
 
@@ -29,9 +30,19 @@ def get_supplier(db: Session, supplier_id: int):
     return db.query(models.Supplier).filter(models.Supplier.id == supplier_id).first()
 
 
-def get_suppliers(db: Session, skip: int = 0, limit: int = 100, sort: str = "id", order: str = "asc"):
+def get_suppliers(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+    sort: str = "id",
+    order: str = "asc",
+    name: Optional[str] = None,
+    contact_person: Optional[str] = None,
+    phone: Optional[str] = None,
+    email: Optional[str] = None
+):
     """
-    Получить список поставщиков с пагинацией и сортировкой.
+    Получить список поставщиков с пагинацией, сортировкой и фильтрацией.
 
     Args:
         db (Session): Сессия базы данных.
@@ -39,16 +50,39 @@ def get_suppliers(db: Session, skip: int = 0, limit: int = 100, sort: str = "id"
         limit (int): Максимальное количество записей.
         sort (str): Поле сортировки ('id' или 'name').
         order (str): Направление ('asc' или 'desc').
+        name (str, optional): Фильтр по имени (частичное совпадение, без учёта регистра).
+        contact_person (str, optional): Фильтр по контактному лицу.
+        phone (str, optional): Фильтр по телефону (точное совпадение).
+        email (str, optional): Фильтр по email (точное совпадение).
 
     Returns:
-        List[models.Supplier]: Список поставщиков.
+        List[models.Supplier]: Список поставщиков, удовлетворяющих условиям.
     """
     query = db.query(models.Supplier)
-    sort_column = models.Supplier.name if sort == "name" else models.Supplier.id
+
+    if name:
+        query = query.filter(models.Supplier.name.ilike(f"%{name}%"))
+    if contact_person:
+        query = query.filter(models.Supplier.contact_person.ilike(f"%{contact_person}%"))
+    if phone:
+        query = query.filter(models.Supplier.phone == phone)
+    if email:
+        query = query.filter(models.Supplier.email == email)
+
+    if not hasattr(models.Supplier, sort):
+        raise HTTPException(status_code=400, detail=f"Invalid sort column: '{sort}'")
+    attr = getattr(models.Supplier, sort)
+    if not isinstance(attr, InstrumentedAttribute):
+        raise HTTPException(status_code=400, detail=f"Cannot sort by '{sort}': not a column")
+    sort_column = attr
+
     if order == "desc":
         query = query.order_by(sort_column.desc())
-    else:
+    elif order == "asc":
         query = query.order_by(sort_column.asc())
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown order")
+
     return query.offset(skip).limit(limit).all()
 
 
@@ -166,17 +200,31 @@ def delete_supplier(db: Session, supplier_id: int):
 # ---------- Endpoints ----------
 @router.get("/", response_model=List[schemas.SupplierResponse])
 def read_suppliers(
-        skip: int = Query(0, ge=0),
-        limit: int = Query(100, ge=1, le=200),
-        sort: str = "id",
-        order: str = "asc",
-        db: Session = Depends(get_db)
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=200),
+    sort: str = "id",
+    order: str = "asc",
+    name: Optional[str] = Query(None, description="Filter by name (partial match, case-insensitive)"),
+    contact_person: Optional[str] = Query(None, description="Filter by contact person (partial match)"),
+    phone: Optional[str] = Query(None, description="Filter by phone (exact match)"),
+    email: Optional[str] = Query(None, description="Filter by email (exact match)"),
+    db: Session = Depends(get_db)
 ):
     """
     GET /suppliers
-    Получить список поставщиков с пагинацией и сортировкой.
+    Получить список поставщиков с пагинацией, сортировкой и фильтрацией.
     """
-    return get_suppliers(db, skip=skip, limit=limit, sort=sort, order=order)
+    return get_suppliers(
+        db,
+        skip=skip,
+        limit=limit,
+        sort=sort,
+        order=order,
+        name=name,
+        contact_person=contact_person,
+        phone=phone,
+        email=email
+    )
 
 
 @router.get("/{supplier_id}", response_model=schemas.SupplierResponse)
@@ -202,9 +250,9 @@ def create_supplier_endpoint(supplier: schemas.SupplierCreate, db: Session = Dep
 
 @router.patch("/{supplier_id}", response_model=schemas.SupplierResponse)
 def update_supplier_endpoint(
-        supplier_id: int,
-        supplier_update: schemas.SupplierUpdate,
-        db: Session = Depends(get_db)
+    supplier_id: int,
+    supplier_update: schemas.SupplierUpdate,
+    db: Session = Depends(get_db)
 ):
     """
     PATCH /suppliers/{supplier_id}
