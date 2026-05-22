@@ -31,7 +31,7 @@ def get_category(db: Session, category_id: int):
 
 def get_categories(
         db: Session,
-        skip: int = 0,
+        page: int = 1,
         limit: int = 100,
         sort: str = "id",
         order: str = "asc",
@@ -43,8 +43,8 @@ def get_categories(
 
     Args:
         db (Session): Сессия базы данных.
-        skip (int): Количество записей для пропуска.
-        limit (int): Максимальное количество записей.
+        page (int): Номер страницы (начиная с 1).
+        limit (int): Количество записей на странице.
         sort (str): Поле сортировки ('id' или 'name').
         order (str): Направление ('asc' или 'desc').
         name (str, optional): Фильтр по имени (частичное совпадение, без учёта регистра).
@@ -60,21 +60,22 @@ def get_categories(
     if description:
         query = query.filter(models.Category.description.ilike(f"%{description}%"))
 
-    if not hasattr(models.Product, sort):
+    if not hasattr(models.Category, sort):
         raise HTTPException(status_code=400, detail=f"Invalid sort column: '{sort}'")
-    attr = getattr(models.Product, sort)
+    attr = getattr(models.Category, sort)
     if not isinstance(attr, InstrumentedAttribute):
         raise HTTPException(status_code=400, detail=f"Cannot sort by '{sort}': not a column")
     sort_col = attr
 
     if order == "desc":
-        query = query.order_by(sort_col .desc())
+        query = query.order_by(sort_col.desc())
     elif order == "asc":
-        query = query.order_by(sort_col .asc())
+        query = query.order_by(sort_col.asc())
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown order")
 
-    return query.offset(skip).limit(limit).all()
+    offset = (page - 1) * limit
+    return query.offset(offset).limit(limit).all()
 
 
 def create_category(db: Session, category: schemas.CategoryCreate):
@@ -173,8 +174,8 @@ def delete_category(db: Session, category_id: int):
 # ---------- Endpoints ----------
 @router.get("/", response_model=List[schemas.CategoryResponse])
 def read_categories(
-        skip: int = Query(0, ge=0),
-        limit: int = Query(100, ge=1, le=200),
+        page: int = Query(1, ge=1, description="Page number (1-based)"),
+        limit: int = Query(100, ge=1, le=200, description="Items per page"),
         sort: str = "id",
         order: str = "asc",
         name: Optional[str] = Query(None, description="Filter by name (partial match, case-insensitive)"),
@@ -187,7 +188,7 @@ def read_categories(
     """
     return get_categories(
         db,
-        skip=skip,
+        page=page,
         limit=limit,
         sort=sort,
         order=order,

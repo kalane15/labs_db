@@ -29,15 +29,15 @@ def get_product(db: Session, product_id: int):
     return db.query(models.Product).filter(models.Product.id == product_id).first()
 
 
-def get_products(db: Session, skip: int = 0, limit: int = 100, sort: str = "id", order: str = "asc",
+def get_products(db: Session, page: int = 1, limit: int = 100, sort: str = "id", order: str = "asc",
                  category_id: int = None, supplier_id: int = None):
     """
     Получить список товаров с поддержкой пагинации, сортировки и фильтрации.
 
     Args:
         db (Session): Сессия базы данных.
-        skip (int): Количество записей для пропуска (пагинация).
-        limit (int): Максимальное количество записей.
+        page (int): Номер страницы (начиная с 1).
+        limit (int): Количество записей на странице.
         sort (str): Поле для сортировки ('id', 'name', 'category_id', 'supplier_id').
         order (str): Направление сортировки ('asc' или 'desc').
         category_id (int, optional): Фильтр по ID категории.
@@ -66,7 +66,8 @@ def get_products(db: Session, skip: int = 0, limit: int = 100, sort: str = "id",
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown order")
 
-    return query.offset(skip).limit(limit).all()
+    offset = (page - 1) * limit
+    return query.offset(offset).limit(limit).all()
 
 
 def create_product(db: Session, product: schemas.ProductCreate):
@@ -187,8 +188,8 @@ def delete_product(db: Session, product_id: int):
 # ---------- Endpoints ----------
 @router.get("/", response_model=List[schemas.ProductResponse])
 def read_products(
-        skip: int = Query(0, ge=0),
-        limit: int = Query(100, ge=1, le=200),
+        page: int = Query(1, ge=1, description="Page number (1-based)"),
+        limit: int = Query(100, ge=1, le=200, description="Items per page"),
         sort: str = "id",
         order: str = "asc",
         category_id: Optional[int] = None,
@@ -199,7 +200,7 @@ def read_products(
     GET /products
     Получить список товаров с пагинацией, сортировкой и фильтрацией.
     """
-    return get_products(db, skip=skip, limit=limit, sort=sort, order=order,
+    return get_products(db, page=page, limit=limit, sort=sort, order=order,
                         category_id=category_id, supplier_id=supplier_id)
 
 

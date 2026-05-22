@@ -107,7 +107,7 @@ def top_destinations(
 @router.get("/inventory-summary", response_model=List[schemas.InventorySummaryResponse])
 def inventory_summary(
     low_stock_threshold: float = Query(10, ge=0),
-    sort_by: str = Query("current_balance", regex="^(current_balance|total_sold|turnover_percentage)$"),
+    sort_by: str = Query("current_balance", pattern="^(current_balance|total_sold|turnover_percentage)$"),
     db: Session = Depends(get_db)
 ):
     """

@@ -32,7 +32,7 @@ def get_supplier(db: Session, supplier_id: int):
 
 def get_suppliers(
     db: Session,
-    skip: int = 0,
+    page: int = 1,
     limit: int = 100,
     sort: str = "id",
     order: str = "asc",
@@ -46,8 +46,8 @@ def get_suppliers(
 
     Args:
         db (Session): Сессия базы данных.
-        skip (int): Количество записей для пропуска.
-        limit (int): Максимальное количество записей.
+        page (int): Номер страницы (начиная с 1).
+        limit (int): Количество записей на странице.
         sort (str): Поле сортировки ('id' или 'name').
         order (str): Направление ('asc' или 'desc').
         name (str, optional): Фильтр по имени (частичное совпадение, без учёта регистра).
@@ -83,7 +83,8 @@ def get_suppliers(
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown order")
 
-    return query.offset(skip).limit(limit).all()
+    offset = (page - 1) * limit
+    return query.offset(offset).limit(limit).all()
 
 
 def create_supplier(db: Session, supplier: schemas.SupplierCreate):
@@ -200,8 +201,8 @@ def delete_supplier(db: Session, supplier_id: int):
 # ---------- Endpoints ----------
 @router.get("/", response_model=List[schemas.SupplierResponse])
 def read_suppliers(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, ge=1, le=200),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
+    limit: int = Query(100, ge=1, le=200, description="Items per page"),
     sort: str = "id",
     order: str = "asc",
     name: Optional[str] = Query(None, description="Filter by name (partial match, case-insensitive)"),
@@ -216,7 +217,7 @@ def read_suppliers(
     """
     return get_suppliers(
         db,
-        skip=skip,
+        page=page,
         limit=limit,
         sort=sort,
         order=order,
