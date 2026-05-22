@@ -229,7 +229,9 @@ def inventory_summary(
             total_received=_to_float(row.total_received),
             total_sold=_to_float(row.total_sold),
             turnover_percentage=_to_float(row.turnover_percentage),
-            days_since_last_sale=row.days_since_last_sale,
+            days_since_last_sale=int(row.days_since_last_sale)
+            if row.days_since_last_sale is not None
+            else None,
             estimated_value=_to_float(row.estimated_value),
         )
         for row in rows

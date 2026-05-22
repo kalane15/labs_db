@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session, InstrumentedAttribute
 from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from typing import List, Optional
-from sqlalchemy import Column
 
 import models, schemas
 from database import get_db
