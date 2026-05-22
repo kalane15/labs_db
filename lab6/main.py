@@ -8,7 +8,12 @@ import functions
 import reports
 import models
 
-models.Base.metadata.create_all(bind=engine)
+tables = [
+    table
+    for table in models.Base.metadata.tables.values()
+    if not table.info.get("is_view")
+]
+models.Base.metadata.create_all(bind=engine, tables=tables)
 
 app = FastAPI(title="Warehouse API", version="1.0")
 
